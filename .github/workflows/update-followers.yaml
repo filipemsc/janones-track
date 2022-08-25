@@ -1,0 +1,52 @@
+on:    
+  workflow_dispatch:
+
+  cron: "0 */12 * * *"
+
+name: janones-track
+
+jobs:
+  
+  track:
+    runs-on: ubuntu-latest
+    env:
+      GITHUB_PAT: ${{ secrets.PAT }}
+
+    steps:
+      - uses: actions/checkout@v2
+            
+      - uses: r-lib/actions/setup-r@master
+        with:
+          r-version: ${{ matrix.config.r }}
+          http-user-agent: ${{ matrix.config.http-user-agent }}
+      - uses: r-lib/actions/setup-pandoc@master
+      
+      #- name: Install Curl
+      #  run: sudo apt-get install libcurl4-openssl-dev
+        
+      - uses: r-lib/actions/setup-r-dependencies@v1
+        with:
+          extra-packages: | 
+                httr, tibble
+            
+      - name: Generate data
+        env:
+          RTWEET_APP: ${{ secrets.RTWEET_BEARER_TOKEN }}
+        run: |
+          df <- read.csv("bases/base_janones.csv",sep=";")
+          followers <- httr::GET("https://cdn.syndication.twimg.com/widgets/followbutton/info.json?screen_names=AndreJanonesAdv")
+          followers <- httr::content(followers)[[1]]$followers_count
+          update <- tibble::tibble(
+          data = as.character(Sys.time()),
+          seguidores = followers)
+          df <- rbind(df, update)
+          write.csv2(df, "bases/base_janones.csv",row.names = FALSE)
+        shell: Rscript {0} 
+        
+      - name: Commit results
+        run: |
+          git config --local user.email "actions@github.com"
+          git config --local user.name "GitHub Actions"
+          git add -A
+          git commit -m 'Update data' || echo "Update data"
+          git push origin || echo "Update data"
